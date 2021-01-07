@@ -32,7 +32,7 @@ Then you can download and install the latest release:
  ### About the pipline 
  The whole pipeline is written to be modular in design. This means that each step can be executed independently as long as the required input files are available 
 
-![Slide](img/pipeline.png)
+![Slide](img/Pipeline.png)
 
  ### Step1.	FASTQ alignment
 This can be achieved by executing the script alignReads.pl. This script makes use of an standard pipeline for mapping short reads based on BWA-MEM to generate aligned files (BAM), sorting and index creation through SAMtools and removal of PCR duplicates with Picard.
