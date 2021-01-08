@@ -16,8 +16,11 @@ cpan Parallel::ForkManager Sort::Key::Natural Statistics::Basic
 ```
 
  #### R packages
+* ggplot2
 * gplots
 * RColorBrewer
+* gtools
+* tidyr
 
 To install R packages on an R session:
 ```
@@ -35,7 +38,7 @@ Then you can download and install the latest release:
 ![Slide](img/Pipeline.png)
 
  ### Step1.	FASTQ alignment
-This can be achieved by executing the script alignReads.pl. This script makes use of an standard pipeline for mapping short reads based on BWA-MEM to generate aligned files (BAM), sorting and index creation through SAMtools and removal of PCR duplicates with Picard.
+This can be achieved by executing the script `alignReads.pl`. This script makes use of an standard pipeline for mapping short reads based on BWA-MEM to generate aligned files (BAM), sorting and index creation through SAMtools and removal of PCR duplicates with Picard.
 
 ```
 perl alignReads.pl -i <fastq_input_dir> -o <output_dir> -t <CPUs> -r  <reference_fasta>
@@ -57,7 +60,7 @@ If accepted, a new genome index will be generated and then the FASTQ alignment w
 
  ### Step2. SNV calling
 
-Next to the mapping phase we will perform the variant calling for every BAM. We will use variantCallChipSeq.pl which wraps FreeBayes variant caller. FreeBayes is a popular tool that is commonly used to detect germline and somatic mutations in a wide variety of sequencing assays.
+Next to the mapping phase we will perform the variant calling for every BAM. We will use `variantCallChipSeq.pl` which wraps FreeBayes variant caller. FreeBayes is a popular tool that is commonly used to detect germline and somatic mutations in a wide variety of sequencing assays.
 
 ````
 perl variantCallChipSeq.pl -i <bam_input_dir> -o <output_dir> -t <CPUs> -r <reference_fasta>
@@ -68,12 +71,13 @@ Where:
 -i,--input   STRING  Input directory with BAM files
 -o,--outdir  STRING  Output directory where all VCF files will be generated
 -g,--genome  STRING  Reference genome in FASTA format
--t,--threads INTEGER Number of CPUs to be used at mapping (default = 4)
+-t,--threads INTEGER Number of CPUs to be used at var calling (default = 4)
 ```
 
  ### Step3. Coverage extraction
 
 In this phase we will extract all genomic segments that have a minimum coverage for each of the samples being analyzed. The coverage metric, refers to the total number of times a genomic position has been sequenced or the total number of reads that overlap that genomic position. In our preliminary analysis we observed that a minimum coverage of 3X was enough to get reliable results.
+This script uses fast coverage extractions using [mosdepth](https://github.com/brentp/mosdepth) 
 
 To extract the coverage:
 
@@ -88,10 +92,12 @@ Where:
 -r,--reference  STRING   Genome version (choose: hg19 or hg39, default = hg19)
 -n,--normfactor INTEGER  Normalization factor (default = 10e7)
 -m,--mincov     INTEGER  Minimum coverage required (default = 3)
--t,--threads    INTEGER  Number of CPUs to be used at mapping (default = 4)
+-t,--threads    INTEGER  Number of CPUs to be used at coverage extraction (default = 4)
 ```
 
  ### Step4. Get normalized counts at protocadherin promoters and create per sample histograms
+
+Now, we can plot a histogram of normalized counts at protocadherin promoters by using `plotHistogram.pl` as follows:
 
 ```
 perl plotHistogram.pl -i <bam_input_dir> -o <output_dir> -r <hg19_hg38> -n <normalization_factor> -e <regions_bed>
@@ -110,7 +116,7 @@ Where:
 
 Instead of using all shared regions between the whole dataset, we preferred to compare each pairwise sample coverage profile to identify common regions. This comes at a cost of higher computational tasks, but offers the possibility to pool samples with greater differences at both sequencing characteristics or antibody class.
 
-For this step we will use the script extractCommonRegions.pl:
+For this step we will use the script `extractCommonRegions.pl`:
 ```
 perl extractCommonRegions.pl -i <coverage_dir> -t <CPUs> 
 ```
@@ -118,7 +124,7 @@ perl extractCommonRegions.pl -i <coverage_dir> -t <CPUs>
 Where:
 ```
 -i,--input   STRING   Input directory with files ending with *COVERAGE.bed 
--t,--threads INTEGER  Number of CPUs to be used at mapping (default = 4)
+-t,--threads INTEGER  Number of CPUs to be used (default = 4)
 ```
 Output files ending with the suffix *shared.bed  will be released at the same input directory where all input files ending with *COVERAGE.bed were found.
 
@@ -137,7 +143,7 @@ Where:
 -b,--bed_dir STRING   Input directory where with BED files ending with *shared.bed
 -o,--outdir  INTEGER  Output directory
 -r,--reference  STRING   Genome version (choose: hg19 or hg39, default = hg19)
--t,--threads INTEGER  Number of CPUs to be used at mapping (default = 4)
+-t,--threads INTEGER  Number of CPUs to be used (default = 4)
 ```
 The output matrix is written on a Tab-Separated Values (TSV) file.
 
@@ -154,6 +160,6 @@ Where:
 -o STRING   Output name of the resulting PNG image
 ```
 
-Here we show and example plot from the test samples included in the project. We can observe that samples 1,6 and 8 can be clustered together, and also samples 3,9 and 10, whereas samples 2, 4 and 5 can be classified as unrelated.
+Here we show and example plot from the test samples included in the project. We can observe that samples 3,9 and 10 can be clustered together, and also samples 6,7 and 8, whereas samples 1,2,4 and 5 can be classified as unrelated.
 
 ![Slide](img/Heatmap.png)
