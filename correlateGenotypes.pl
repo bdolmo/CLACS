@@ -125,13 +125,17 @@ foreach my $vcf1 ( @vcfs ) {
         #$pm->start and next;
         $seen{$vcf1}{$vcf2}++;
         $seen{$vcf2}{$vcf1}++;
+        my $name2 = basename ($vcf2);
+        $name2 =~s/.vcf//;
 
+        if ($name1 eq $name2) {
+            print TMP "$name1\t$name2\t.\t1\n";
+        }
         next if $seen{$vcf1}{$vcf2} > 1;
         next if $seen{$vcf2}{$vcf1} > 1;
 
  	    $counter++;
-        my $name2 = basename ($vcf2);
-        $name2 =~s/.vcf//;
+
         if ($name1 eq $name2) {
             print TMP "$name1\t$name2\t.\t1\n";
         }
@@ -154,6 +158,10 @@ foreach my $vcf1 ( @vcfs ) {
                 system $cmd if !-e "$outDir/$name2.$counter.tmp.vcf";
 
                 my $total_kb    = countKiloBases($bed_candidate);
+
+                # my $correlation = variantSimilarity($bed_candidate, 
+                #     "$outDir/$name1.$counter.tmp.vcf", "$outDir/$name2.$counter.tmp.vcf");
+
                 my $correlation = compareCoordinates($bed_candidate, 
                     "$outDir/$name1.$counter.tmp.vcf", "$outDir/$name2.$counter.tmp.vcf");
                 print TMP "$name1\t$name2\t$total_kb\t$correlation\n";
@@ -211,6 +219,84 @@ sub countKiloBases {
     }
     return $sum/1000 . " kb";
 }
+
+sub variantSimilarity {
+
+    my $regions = shift;
+    my $vcf_A   = shift;
+    my $vcf_B   = shift;
+    my %vcf = ();
+
+    my @array_A = ();
+    my @array_B = ();
+    open (A, "<", $vcf_A) || die "ERROR: Unable to open $vcf_A\n";
+    while (my $line=<A>) {
+        chomp $line;
+        next if $line =~/^#/;  
+        my @tmp = split (/\t/, $line);
+        my @info = split (";", $tmp[7]);
+        next if $tmp[0] =~/_/;
+        my $p = $tmp[1]+1;
+	    $vcf{"$tmp[0]\t$tmp[1]\t$p"}{A} = 1;		
+    }
+    close A;
+
+    open (B, "<", $vcf_B) || die " ERROR: Unable to open $vcf_B\n";
+    while (my $line=<B>) {
+        chomp $line;
+        next if $line =~/^#/;  
+        my @tmp = split (/\t/, $line);
+        my @info = split (";", $tmp[7]);
+        next if $tmp[0] =~/_/;
+        my $p = $tmp[1]+1;
+	    my $var = "$tmp[3]/$tmp[4]";
+        $vcf{"$tmp[0]\t$tmp[1]\t$p"}{B} = 1;		
+    }
+    close B;
+    my $counter = 0;
+    open (REGIONS, "<", $regions) || die " ERROR: Unable to open $regions\n";
+    while (my $line=<REGIONS>) {
+        chomp $line;
+        my @tmp   = split (/\t/, $line);
+        my $chr   = $tmp[0];
+        my $start = $tmp[1];
+        my $end   = $tmp[2];
+        for (my $i = $start; $i <= $end; $i++) {
+	        $counter++;
+            my $p = $i+1;
+            foreach my $sample ( sort keys %samples ) {
+                my $position = "$chr\t$i\t$p";
+                if (!exists $vcf{"$chr\t$i\t$p"}{A}) {
+                    #push @array_A, "0";
+                }
+                else {
+                    my $position = "$chr\t$i\t$p";
+                    push @array_A, $vcf{$position}{A};
+                }	
+                if (!exists$vcf{"$chr\t$i\t$p"}{B}) {
+                    #push @array_B, "0";
+                }
+                else {
+                    push @array_B, $vcf{$position}{B};
+                }
+            }
+        }
+    }
+    close REGIONS;
+    my $idx = 0;
+    my $equals = 0;
+    foreach my $value_A (@array_A){
+        my $value_B = $array_B[$idx];
+        if ($value_A == $value_B){
+            $equals++;
+        } 
+        $idx++;
+    } 
+    print"$equals" . " " . scalar @array_A .  "\n"; 
+    my $similarity = sprintf ("%.3f", $equals/scalar@array_A);
+    return $similarity;
+}
+
 
 ##############################
 sub compareCoordinates {
@@ -279,6 +365,7 @@ sub compareCoordinates {
             }
         }
     }
+    close REGIONS;
     #print " Calculating correlation\n";
     my $cor = correlation( \@array_A, \@array_B );
     $cor=~s/,/./; 
