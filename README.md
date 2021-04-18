@@ -21,11 +21,14 @@ cpan Parallel::ForkManager Sort::Key::Natural Statistics::Basic
 * RColorBrewer
 * gtools
 * tidyr
+* dplyr
+* grid
+* gridExtra
 
 To install R packages on an R session:
 ```
 R
-install.packages(c("ggplot2",“gplots”, “RColorBrewer”, "gtools", "tidyr"))
+install.packages(c("ggplot2",“gplots”, “RColorBrewer”, "gtools", "tidyr", "dplyr", "grid", "gridExtra"))
 ```
 
 Then you can download and install the latest release:
@@ -41,18 +44,20 @@ Then you can download and install the latest release:
 This can be achieved by executing the script `alignReads.pl`. This script makes use of an standard pipeline for mapping short reads based on BWA-MEM to generate aligned files (BAM), sorting and index creation through SAMtools and removal of PCR duplicates with Picard.
 
 ```
-perl alignReads.pl -i <fastq_input_dir> -o <output_dir> -t <CPUs> -r  <reference_fasta>
+perl alignReads.pl -i <fastq_input_dir> -o <output_dir> -g <reference_fasta> -r <hg19/hg38> -t <CPUs> 
 ```
 
 Where:
 ```
--i,--input   STRING  Input directory with gzipped FASTQ files (fq.gz or fastq.gz)
--o,--outdir  STRING  Output directory where all BAM files will be generated
--g,--genome  STRING  Reference genome in FASTA format
--t,--threads INTEGER Number of CPUs to be used at mapping (default = 4)
+-i,--input      STRING  Input directory with gzipped FASTQ files (fq.gz or fastq.gz)
+-o,--outdir     STRING  Output directory where all BAM files will be generated
+-g,--genome     STRING  Reference genome in FASTA format
+-r,--reference  STRING  Genome version. Choose between [hg19, hg38] (default = hg19)
+-m,--mode       STRING  Alignment mode. Choose between [dna, rna] (default = dna)
+-t,--threads    INTEGER Number of CPUs to be used at mapping (default = 4)
 ```
 
-BWA requires a genome index file located at the same directory as the reference genome. When executing alignReads.pl, if BWA index is absent, a prompt message will appear asking the user for its creation: 
+BWA/STAR require a genome index file located at the same directory as the reference genome. When executing alignReads.pl, if BWA index is absent, a prompt message will appear asking the user for its creation (here shown for BWA) 
 ```
 Press ‘y’ to create a BWA index or press ‘n’ to cancel the operation
 ```
@@ -60,10 +65,10 @@ If accepted, a new genome index will be generated and then the FASTQ alignment w
 
  ### Step2. SNV calling
 
-Next to the mapping phase we will perform the variant calling for every BAM. We will use `variantCallChipSeq.pl` which wraps FreeBayes variant caller. FreeBayes is a popular tool that is commonly used to detect germline and somatic mutations in a wide variety of sequencing assays.
+Next to the mapping phase we will perform the variant calling for every BAM. We will use `callSNV.pl` which wraps FreeBayes variant caller. FreeBayes is a popular tool that is commonly used to detect germline and somatic mutations in a wide variety of sequencing assays.
 
 ````
-perl variantCallChipSeq.pl -i <bam_input_dir> -o <output_dir> -t <CPUs> -r <reference_fasta>
+perl callSNV.pl -i <bam_input_dir> -o <output_dir> -t <CPUs> -r <reference_fasta>
 ````
 
 Where:
@@ -82,7 +87,7 @@ This script uses fast coverage extractions using [mosdepth](https://github.com/b
 To extract the coverage:
 
 ```
-perl extractCoverage.pl -i <bam_input_dir> -o <output_dir> -r <hg19_hg38> -n <normalization_factor> -m <minimum_coverage> -t <CPUs>
+perl extractCoverage.pl -i <bam_input_dir> -o <output_dir> -r <hg19/hg38> -n <normalization_factor> -m <minimum_coverage> -t <CPUs>
 ```
 
 Where:
@@ -95,22 +100,22 @@ Where:
 -t,--threads    INTEGER  Number of CPUs to be used at coverage extraction (default = 4)
 ```
 
- ### Step4. Get normalized counts at protocadherin promoters and create per sample histograms
+ ### Step4. PCDH Profiling
 
-Now, we can plot a histogram of normalized counts at protocadherin promoters by using `plotHistogram.pl` as follows:
+Now, we can plot a histogram of normalized counts at protocadherin promoters by using `profilePcdh.pl` as follows:
 
+Get normalized counts at protocadherin promoters and create per sample histograms
 ```
-perl plotHistogram.pl -i <bam_input_dir> -o <output_dir> -r <hg19_hg38> -n <normalization_factor> -e <regions_bed>
+perl profilePcdh.pl -i <dir_with_norm_bed_gz> -o <output_dir> -e <bed_regions> -n <normalization_factor> -r <hg19/hg38>
 ```
-
 Where:
-```
--i,--input      STRING   Input directory with BAM files
--o,--outdir     STRING   Output directory
--r,--reference  STRING   Genome version (choose: hg19 or hg39, default = hg19)
--n,--normfactor INTEGER  Normalization factor (default = 10e7)
--e,--regions    STRING   BED regions to extract counts
-```
+``` 
+ -i,--input       STRING   Input directory with *.normalized.bed.gz files
+ -o,--outdir      STRING   Output directory
+ -e,--regions     STRING   BED regions to extract counts
+ -n,--normfactor  INT      Normalization factor (default=10e7)
+ -r,--reference   STRING   Genome version. Choose between [hg19, hg38] (default = hg19)
+``` 
 
  ### Step5. Identifying shared sequenced regions between samples
 
@@ -134,7 +139,7 @@ Output files ending with the suffix *shared.bed  will be released at the same in
 The last analytical step consists on calculate the relatedness of every sample from their VCF files. Each pairwise is restricted over the shared sequenced regions identified previously. We will use SNVs exclusively, since INDEL lower genotyping robustness may introduce artifacts.
 
 ```
-perl compareVcfCorrelation.pl -v <input_vcf_dir> -b <input_shared_bed_dir> -r <hg19_hg38> -o <output_dir> -t <CPUs>
+perl correlateGenotypes.pl -v <input_vcf_dir> -b <input_shared_bed_dir> -r <hg19_hg38> -o <output_dir> -t <CPUs>
 ```
 
 Where:

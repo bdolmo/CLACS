@@ -135,28 +135,74 @@ plotHistogram("$outputDir/normalized.counts.bed", $outputDir);
 
 ##################################
 sub plotHistogram {
-    my $normCov = shift;
+    my $normCov   = shift;
     my $outputDir = shift;
 
-	my $libraries = "library(RColorBrewer)\nlibrary(ggplot2)\nlibrary(tidyr)\nlibrary(gtools)\n";
+    my @libs = (
+        "library(RColorBrewer)",
+        "library(ggplot2)",
+        "library(tidyr)",
+        "library(gtools)",
+        "library(gridExtra)",
+        "library(dplyr)",
+        "library(grid)"
+    );
+    my $libraries = join("\n", @libs);
 
 	open (R, ">", "$outputDir/plotHistogram.R") || die " ERROR: Cannot open $outputDir/plotHistogram.R\n";
 	print R "$libraries\n";
 	print R "mydata<-read.table(file=\"$normCov\", sep =\'\t\', check.names = FALSE, header=TRUE)\n";
-    print R "mydata <- mydata \%>\% gather(Sample, Counts, 5:ncol(mydata))\n";
+
+    print R "mydata <- mydata %>% gather(Sample, Counts, 5:ncol(mydata))\n";
+    print R "mydata\$region<-factor( mydata\$region, levels=unique(mixedsort(mydata\$region)))\n";
+    print R "mydata\$region <- factor(mydata\$region,levels = c(\"A1\",\"A2\",\"A3\",\"A4\",\"A5\",\"A6\",\"A7\",\"A8\",\"A9\",\"A10\",\"A11\", \"A12\", \"A13\",\"GA1\", \"GA2\", \"GA3\", \"GB1\", \"GA4\", \"GB2\", \"GA5\", \"GB3\", \"GA6\", \"GA7\", \"GB4\", \"GA8\", \"GB5\", \"GA9\", \"GB6\", \"GA10\", \"GB7\", \"GA11\", \"GA12\"))\n";
+    print R "pcdha <-c(\"A1\",\"A2\",\"A3\",\"A4\",\"A5\",\"A6\",\"A7\",\"A8\",\"A9\",\"A10\",\"A11\", \"A12\",\"A13\")\n";
+    print R "pcdhb <-c(\"GA1\", \"GA2\", \"GA3\", \"GB1\", \"GA4\", \"GB2\", \"GA5\", \"GB3\", \"GA6\", \"GA7\", \"GB4\", \"GA8\", \"GB5\", \"GA9\", \"GB6\", \"GA10\", \"GB7\", \"GA11\", \"GA12\")\n";
+
+    print R " j = 1\n";
+    print R "
+    p_list <- list()
+    for (i in 1:14) {
+        sample <- sample_list[i]
+        out_png <- paste(\"$outputDir\", sample , \".png\", sep="")
+        #png(out_png, res = 150, height=235, width=1600)
+        sampledata<-mydata %>% filter(Sample == sample)
+        data_pcdha<-filter(sampledata, region \%in\% pcdha)
+        data_others<- filter(sampledata, region \%in\% pcdhb)
+
+        min<- 0
+        max1 <- max(data_pcdha\$Counts)
+        max2 <- max(data_others\$Counts)
+        max <- max1
+        if (max2 > max) {
+            max <- max2
+        } 
+        limits <- c(0, max)
+        breaks <- seq(min, max, length.out=4)
+        p_list[[j]] <- ggplot(data=data_pcdha, aes_string(x=data_pcdha\$region, y=data_pcdha\$Counts, fill=data_pcdha\$Counts)) + 
+            geom_bar(stat=\"identity\",width=.75, colour=\"black\", size=0.25) + scale_fill_gradient(low=\"white\", high=\"lightseagreen\") +
+            theme(plot.title=element_text(face=\"bold\")) + theme(legend.position=\"none\") +
+            theme(axis.text.x=element_blank(), axis.ticks.x=element_blank(), axis.text.y=element_blank(),axis.title.y=element_blank(),axis.title.x=element_blank())+ 
+            theme(panel.background=element_rect(fill=\"white\", color=\"white\"), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + 
+            theme(axis.line=element_blank()) + theme(plot.title=element_text(face=\"bold\")) + scale_y_continuous(limits=limits,breaks=breaks)
+        p_list[[j+1]] <- ggplot(data=data_others, aes_string(x=data_others\$region, y=data_others\$Counts, fill=data_others\$Counts)) + 
+            geom_bar(stat=\"identity\",width=.75, colour=\"black\", size=0.25) + scale_fill_gradient(low=\"white\", high=\"lightseagreen\") +
+            theme(plot.title=element_text(face=\"bold\")) + theme(legend.position=\"none\") +
+            theme(axis.text.x=element_blank(), axis.ticks.y=element_blank(), axis.text.y=element_blank(), axis.ticks.x=element_blank(),axis.title.y=element_blank(),axis.title.x=element_blank())+ 
+            theme(panel.background=element_rect(fill=\"white\", color=\"white\"), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + 
+            theme(axis.line=element_blank()) + theme(plot.title=element_text(face=\"bold\")) + scale_y_continuous(limits=limits,breaks=breaks)
+        p_list[[j]] <- ggplot_gtable(ggplot_build(p_list[[j]]))
+        p_list[[j+1]] <- ggplot_gtable(ggplot_build(p_list[[j+1]]))
+        p_list[[j]]\$heights <- p_list[[j+1]]\$heights
+        j<-j+2
+    }\n";
 	print R "png(\"$outputDir/histogram.normalized.counts.png\", res = 250, height=3500, width=1600)\n";
-    print R "mydata\$region<-factor( mydata\$region, levels=unique(mixedsort(mydata\$region)))\n"; 
-    print R "myplot<-ggplot(mydata, aes(x=mydata\$region, y=mydata\$Counts)) + geom_bar(stat=\"identity\",width=.75, colour=\"black\", fill=\"lightseagreen\", size=0.25)" .
-        " + xlab(\"Genes\") + ggtitle(\"Normalized counts at protocadherin loci\") \n"; 
-    print R "myplot + theme(plot.title=element_text(face=\"bold\")) + facet_grid(rows=vars(Sample))+theme_bw()" .
-        " + theme(axis.text.x=element_text(angle=40,size=7, vjust=1, hjust=1, face=\"italic\"))+ theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())\n";
+    print R "grid.arrange(grobs=p_list, widths=c(0.4,0.56),ncol=2 )\n";
 	print R "dev.off()\n";
 	close R;
 
     my $cmd = "$Rscript $outputDir/plotHistogram.R $devNull";
     system $cmd;
-
-    #unlink("$outputDir/plotHistogram.R");
 } 
 
 ##################################
@@ -167,6 +213,6 @@ sub Help {
  -o,--outdir      STRING   Output directory
  -e,--regions     STRING   BED regions to extract counts
  -n,--normfactor  INT      Normalization factor (default=10e7)
- -r,--reference   STRING   Genome versions (choose: hg19, hg38, default=hg19)\n\n";
+ -r,--reference   STRING   Genome version. Choose between [hg19, hg38] (default = hg19)\n\n";
 	exit;
 }
